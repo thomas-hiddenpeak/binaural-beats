@@ -14,6 +14,16 @@
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+<script>
+// Immediately apply edition body class to prevent FOUC
+(function(){
+  var e = new URLSearchParams(location.search).get('edition')
+       || localStorage.getItem('bb-edition');
+  if (e === 'marketing' || e === 'mystic') document.body.className = e;
+  if (new URLSearchParams(location.search).get('edition'))
+    document.documentElement.dataset.linked = '1';
+})();
+</script>
 
 <div class="top-bar">
   <h1>🎧 <span data-i18n="title">双耳拍体验器 Pro</span></h1>

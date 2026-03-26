@@ -69,15 +69,48 @@
 
 ## 技术实现
 
-- **纯前端单文件**，零依赖，零后端
+- **纯前端**，零依赖，零后端，ES Module 模块化架构
 - Web Audio API（OscillatorNode / AudioWorklet / ChannelMerger）
 - SSB 调制运行于 AudioWorklet 音频渲染线程（ScriptProcessorNode 自动回退）
 - Web Worker 离线预处理：手写 radix-2 Cooley-Tukey FFT + overlap-save 分块 Hilbert 变换
 - 立体声独立处理，保留原始声像定位
 - 循环 crossfade 消除接缝爆音
-- Worker / Worklet 代码均以 Blob URL 内联，维持单文件部署
 - Canvas 实时差频包络可视化
 - 拖拽上传音频文件
+
+### 项目结构
+
+```
+├── index.html                  # 纯结构，无内联脚本/样式
+├── css/style.css               # 全部样式
+├── js/
+│   ├── app.js                  # 应用入口，模块组装
+│   ├── audio-engine.js         # 音频引擎 Facade
+│   ├── modes/
+│   │   ├── base-mode.js        # 模式抽象基类 (Template Method)
+│   │   ├── pure-tone.js        # 纯音模式
+│   │   ├── music-ssb.js        # 音乐SSB频移模式
+│   │   └── drone.js            # 持续音模式
+│   ├── ui/
+│   │   ├── visualizer.js       # Canvas波形可视化
+│   │   ├── info-panel.js       # 频段信息面板
+│   │   ├── file-handler.js     # 文件上传/拖放
+│   │   └── controls.js         # 控件绑定与参数读取
+│   ├── utils/
+│   │   └── freq-distribution.js # 频率分配策略 (Strategy Pattern)
+│   └── workers/
+│       ├── hilbert-worker.js   # FFT/Hilbert Web Worker
+│       └── ssb-worklet.js      # SSB AudioWorklet Processor
+└── README.md
+```
+
+### 设计模式
+
+| 模式 | 应用 |
+|------|------|
+| **Strategy** | 频率分配策略（对称/仅左/仅右），可独立扩展新的分配算法 |
+| **Template Method** | `BaseMode` 定义 start/stop/update 生命周期，子类实现具体音频图 |
+| **Facade** | `AudioEngine` 统一管理 AudioContext、模式切换、参数传递 |
 
 ## 工程探索历程
 
@@ -151,6 +184,23 @@ $$f_{R} - f_{L} = \Delta f \quad \text{（差频守恒）}$$
 4. **循环 Crossfade**：在播放末尾 2048 采样（~46ms）处开始与开头做线性交叉渐变，消除循环衔接的波形不连续。循环复位点跳到 `cfLen` 处以避免重复已渐入的内容。
 
 5. **拖拽上传**：为文件选择区域添加 `dragover`/`dragleave`/`drop` 事件处理。
+
+### 第七步：模块化重构——从单文件到可维护架构
+
+前六步的成果是一个功能完整的单 HTML 文件（~1050 行），所有 CSS、HTML、JS 内联。Worker 和 Worklet 代码以字符串形式嵌入，通过 Blob URL 动态创建。这种"单文件部署"虽方便，但随着功能增长，维护性急剧下降：任何修改都需要在一个巨大文件中定位代码，模式之间相互耦合，无法独立测试。
+
+重构方案：
+
+1. **HTML/CSS/JS 三层分离**：`index.html` 只保留纯结构标记，无任何 `<style>` 或 `<script>` 内联代码。CSS 提取到 `css/style.css`。JS 通过 `<script type="module">` 加载 ES Module 入口。
+
+2. **设计模式指导拆分**：
+   - **Strategy**：频率分配策略（`freq-distribution.js`）将对称/仅左/仅右三种算法封装为可替换的策略对象，新增分配方式只需添加一个策略。
+   - **Template Method**：`BaseMode` 定义音频模式的生命周期（start → update → stop），三种模式各自实现音频图构建逻辑，互不干扰。
+   - **Facade**：`AudioEngine` 为 UI 层提供统一的 `start()`/`stop()`/`update()` 接口，隐藏 AudioContext 管理、模式切换、WorkerWorklet 协调等复杂性。
+
+3. **Worker/Worklet 文件独立**：不再用 Blob URL 从字符串创建，而是作为独立 `.js` 文件直接引用。调试友好（DevTools 可直接断点），也为未来 Service Worker 缓存铺路。
+
+4. **UI 模块化**：可视化、信息面板、文件处理、控件绑定各自独立，通过 `app.js` 组装。每个 UI 模块只关心自己的 DOM 交互，不直接操作音频。
 
 ## 参考文献
 

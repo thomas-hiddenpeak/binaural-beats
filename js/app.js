@@ -7,6 +7,7 @@ import { Visualizer } from './ui/visualizer.js';
 import { InfoPanel } from './ui/info-panel.js';
 import { FileHandler } from './ui/file-handler.js';
 import { Controls } from './ui/controls.js';
+import { t, getLang, setLang, onLangChange } from './i18n/i18n.js';
 
 class App {
   constructor() {
@@ -18,8 +19,10 @@ class App {
     this._initFileHandler();
     this._bindControls();
     this._initPresets();
+    this._initLangSwitcher();
 
     // 初始状态
+    this.applyI18n();
     this.updateParams();
     this.visualizer.clear();
   }
@@ -31,10 +34,12 @@ class App {
       fileInfoId: 'fileInfo',
       onFileLoad: (file, callbacks) => {
         const ctx = this.engine.getCtx();
+        const stereoPreserve = this.controls.els.stereoToggle.checked;
         this.engine.musicMode.loadFile(file, ctx,
           callbacks.onProgress,
           callbacks.onReady,
-          callbacks.onError
+          callbacks.onError,
+          stereoPreserve
         );
       }
     });
@@ -61,6 +66,82 @@ class App {
     });
   }
 
+  _initLangSwitcher() {
+    const btn = document.getElementById('langBtn');
+    btn.addEventListener('click', () => {
+      setLang(getLang() === 'zh' ? 'en' : 'zh');
+    });
+    onLangChange(() => {
+      this.applyI18n();
+      this.updateParams();
+      this.visualizer.clear();
+    });
+  }
+
+  applyI18n() {
+    const lang = getLang();
+    document.getElementById('langBtn').textContent = lang === 'zh' ? 'EN' : '中文';
+
+    // Static text via data-i18n
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+      const key = el.getAttribute('data-i18n');
+      el.textContent = t(key);
+    });
+
+    // Warning (has HTML)
+    document.querySelector('.warning').innerHTML = t('warning');
+
+    // Tabs
+    const tabs = document.querySelectorAll('.tab-btn');
+    tabs[0].textContent = t('tabPure');
+    tabs[1].textContent = t('tabMusic');
+    tabs[2].textContent = t('tabDrone');
+
+    // Play button (only update if not playing)
+    if (!this.engine.isPlaying) {
+      this.controls.els.playBtn.textContent = t('playStart');
+    }
+
+    // Labels
+    document.querySelector('#panel-pure .name').textContent = t('carrier');
+    const names = document.querySelectorAll('.controls .name');
+    names[0].textContent = t('beatLabel');
+    names[1].textContent = t('distLabel');
+    names[2].textContent = t('volumeLabel');
+
+    // Drone panel labels
+    const droneNames = document.querySelectorAll('#panel-drone .name');
+    droneNames[0].textContent = t('droneTypeLabel');
+    droneNames[1].textContent = t('droneFreqLabel');
+
+    // File area
+    const fa = document.getElementById('fileArea');
+    if (!fa.classList.contains('loaded')) {
+      fa.childNodes[0].textContent = t('fileArea');
+    }
+
+    // Freq dist options
+    const distSel = this.controls.els.freqDist;
+    distSel.options[0].textContent = t('distSymmetric');
+    distSel.options[1].textContent = t('distRight');
+    distSel.options[2].textContent = t('distLeft');
+    distSel.options[3].textContent = t('distAlternating');
+
+    // Drone type options
+    const droneSel = this.controls.els.droneType;
+    droneSel.options[0].textContent = t('tambura');
+    droneSel.options[1].textContent = t('bowl');
+    droneSel.options[2].textContent = t('organ');
+    droneSel.options[3].textContent = t('pad');
+
+    // Presets
+    const presetBtns = document.querySelectorAll('.preset-btn .desc');
+    const presetKeys = ['presetDelta', 'presetTheta', 'presetAlpha', 'presetBeta', 'presetLimit', 'presetCollapse'];
+    presetBtns.forEach((el, i) => {
+      if (presetKeys[i]) el.textContent = t(presetKeys[i]);
+    });
+  }
+
   async togglePlay() {
     if (this.engine.isPlaying) {
       this.engine.stop();
@@ -78,7 +159,7 @@ class App {
         this.updateParams();
       } catch (e) {
         console.error('Start audio error:', e);
-        alert(e.message || '音频启动失败');
+        alert(e.message || t('audioFail'));
       }
     }
   }

@@ -1,6 +1,8 @@
 /**
  * FileHandler — 文件上传与拖放处理
  */
+import { t } from '../i18n/i18n.js';
+
 export class FileHandler {
   constructor({ fileAreaId, fileInputId, fileInfoId, onFileLoad }) {
     this.fileArea = document.getElementById(fileAreaId);
@@ -44,13 +46,13 @@ export class FileHandler {
   }
 
   _handleFile(file) {
-    this.fileInfo.textContent = '解码中...';
+    this.fileInfo.textContent = t('decoding') ;
     this.onFileLoad(file, {
       onProgress: (name, progress, dur, chLabel) => {
-        this.fileInfo.textContent = '✅ ' + name + ' — 预处理: ' + Math.round(progress * 100) + '%';
+        this.fileInfo.textContent = '✅ ' + name + ' — ' + t('preProcess') + ': ' + Math.round(progress * 100) + '%';
       },
       onReady: (name, dur, chLabel) => {
-        this.fileInfo.textContent = '✅ ' + name + ' (' + dur + 's, ' + chLabel + ') — 已就绪';
+        this.fileInfo.textContent = '✅ ' + name + ' (' + dur + 's, ' + chLabel + ') — ' + t('ready');
         this.fileArea.className = 'file-area loaded';
       },
       onError: (msg) => {

@@ -1,6 +1,8 @@
 /**
  * Controls — 控件绑定与参数读取
  */
+import { t } from '../i18n/i18n.js';
+
 export class Controls {
   constructor() {
     this.els = {
@@ -11,6 +13,7 @@ export class Controls {
       droneType: document.getElementById('droneType'),
       droneFreq: document.getElementById('droneFreq'),
       loopToggle: document.getElementById('loopToggle'),
+      stereoToggle: document.getElementById('stereoToggle'),
 
       carrierVal: document.getElementById('carrierVal'),
       beatVal: document.getElementById('beatVal'),
@@ -34,6 +37,7 @@ export class Controls {
       base.carrier = parseFloat(this.els.carrier.value);
     } else if (modeName === 'music') {
       base.loop = this.els.loopToggle.checked;
+      base.stereoPreserve = this.els.stereoToggle.checked;
     } else if (modeName === 'drone') {
       base.droneType = this.els.droneType.value;
       base.droneFreq = parseFloat(this.els.droneFreq.value);
@@ -61,10 +65,10 @@ export class Controls {
 
   setPlaying(playing) {
     if (playing) {
-      this.els.playBtn.textContent = '■ 停止';
+      this.els.playBtn.textContent = t('playStop');
       this.els.playBtn.className = 'play-btn on';
     } else {
-      this.els.playBtn.textContent = '▶ 点击开始';
+      this.els.playBtn.textContent = t('playStart');
       this.els.playBtn.className = 'play-btn off';
     }
   }

@@ -1,5 +1,9 @@
 import { BaseMode } from './base-mode.js';
-import { getDroneFreqs } from '../utils/freq-distribution.js';
+import { getDroneFreqs, isAlternating } from '../utils/freq-distribution.js';
+import { t } from '../i18n/i18n.js';
+
+const SWAP_INTERVAL = 5 * 60 * 1000;  // 5 minutes
+const SWAP_FADE_SEC = 2.5;            // 2.5 second crossfade
 
 export const DRONE_TYPES = {
   tambura: {
@@ -40,6 +44,8 @@ export class DroneMode extends BaseMode {
     super('drone');
     this.oscillators = [];
     this.masterGain = null;
+    this.swapped = false;
+    this._swapTimer = null;
   }
 
   async _doStart(ctx, params) {
@@ -47,6 +53,7 @@ export class DroneMode extends BaseMode {
     const def = DRONE_TYPES[droneType];
     const baseFreq = droneFreq;
     const vol = volume / 100;
+    this.swapped = false;
 
     const merger = ctx.createChannelMerger(2);
     this.masterGain = ctx.createGain();
@@ -65,7 +72,7 @@ export class DroneMode extends BaseMode {
     this.oscillators = [];
 
     def.partials.forEach(p => {
-      const freqs = getDroneFreqs(baseFreq, p.ratio, beat, dist);
+      const freqs = getDroneFreqs(baseFreq, p.ratio, beat, dist, this.swapped);
 
       const oscL = ctx.createOscillator();
       const oscR = ctx.createOscillator();
@@ -92,9 +99,33 @@ export class DroneMode extends BaseMode {
     this.masterGain.connect(ctx.destination);
 
     this.nodes.push(merger, this.masterGain, lfo, lfoGain);
+
+    if (isAlternating(dist)) this._startSwapTimer(ctx, params);
+  }
+
+  _startSwapTimer(ctx, params) {
+    this._clearSwapTimer();
+    this._swapTimer = setInterval(() => {
+      this.swapped = !this.swapped;
+      const now = ctx.currentTime;
+      this.oscillators.forEach(d => {
+        const freqs = getDroneFreqs(params.droneFreq, d.ratio, params.beat, params.dist, this.swapped);
+        d.oscL.frequency.linearRampToValueAtTime(freqs.left, now + SWAP_FADE_SEC);
+        d.oscR.frequency.linearRampToValueAtTime(freqs.right, now + SWAP_FADE_SEC);
+      });
+    }, SWAP_INTERVAL);
+  }
+
+  _clearSwapTimer() {
+    if (this._swapTimer) {
+      clearInterval(this._swapTimer);
+      this._swapTimer = null;
+    }
   }
 
   _doStop() {
+    this._clearSwapTimer();
+    this.swapped = false;
     this.oscillators = [];
     this.masterGain = null;
   }
@@ -105,7 +136,7 @@ export class DroneMode extends BaseMode {
     const now = ctx.currentTime;
 
     this.oscillators.forEach(d => {
-      const freqs = getDroneFreqs(droneFreq, d.ratio, beat, dist);
+      const freqs = getDroneFreqs(droneFreq, d.ratio, beat, dist, this.swapped);
       d.oscL.frequency.setValueAtTime(freqs.left, now);
       d.oscR.frequency.setValueAtTime(freqs.right, now);
     });
@@ -113,27 +144,36 @@ export class DroneMode extends BaseMode {
     if (this.masterGain) {
       this.masterGain.gain.setValueAtTime(vol, now);
     }
+
+    if (isAlternating(dist) && !this._swapTimer) {
+      this._startSwapTimer(ctx, params);
+    } else if (!isAlternating(dist) && this._swapTimer) {
+      this._clearSwapTimer();
+      this.swapped = false;
+    }
   }
 
   getChannelInfo(params) {
     const { droneType, droneFreq, beat, dist } = params;
     const partials = DRONE_TYPES[droneType].partials;
     const lowest = droneFreq * Math.min(...partials.map(p => p.ratio));
+    const alt = isAlternating(dist);
+    const suffix = alt ? ' ↔' : '';
 
-    if (dist === 'symmetric') {
+    if (dist === 'symmetric' || alt) {
       return {
-        left: '左耳: 基频 ' + lowest.toFixed(0) + ' Hz -' + (beat / 2) + ' Hz',
-        right: '右耳: 基频 ' + lowest.toFixed(0) + ' Hz +' + (beat / 2) + ' Hz'
+        left: t('leftEar') + ': ' + lowest.toFixed(0) + ' Hz ' + (this.swapped ? '+' : '-') + (beat / 2) + ' Hz' + suffix,
+        right: t('rightEar') + ': ' + lowest.toFixed(0) + ' Hz ' + (this.swapped ? '-' : '+') + (beat / 2) + ' Hz' + suffix
       };
     } else if (dist === 'left') {
       return {
-        left: '左耳: 全部 -' + beat + ' Hz 线性频移',
-        right: '右耳: 基频 ' + lowest.toFixed(0) + ' Hz + 泛音'
+        left: t('leftEar') + ': -' + beat + ' Hz ' + t('freqShift'),
+        right: t('rightEar') + ': ' + lowest.toFixed(0) + ' Hz'
       };
     }
     return {
-      left: '左耳: 基频 ' + lowest.toFixed(0) + ' Hz + 泛音',
-      right: '右耳: 全部 +' + beat + ' Hz 线性频移'
+      left: t('leftEar') + ': ' + lowest.toFixed(0) + ' Hz',
+      right: t('rightEar') + ': +' + beat + ' Hz ' + t('freqShift')
     };
   }
 }

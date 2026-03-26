@@ -25,6 +25,7 @@
 | 策略 | 说明 | 推荐场景 |
 |------|------|---------|
 | ⚖️ 对称分配 | 双耳各移 ±½ 差频 | **默认推荐**，听感最均衡 |
+| ↔️ 左右交替 | 对称分配 + 定时自动交换 | **长时间聆听推荐**，降低单耳疲劳 |
 | ➡️ 仅右耳频移 | 左耳原始，右耳 +差频 | 单侧对照体验 |
 | ⬅️ 仅左耳频移 | 左耳 -差频，右耳原始 | 单侧对照体验 |
 
@@ -73,24 +74,31 @@
 - Web Audio API（OscillatorNode / AudioWorklet / ChannelMerger）
 - SSB 调制运行于 AudioWorklet 音频渲染线程（ScriptProcessorNode 自动回退）
 - Web Worker 离线预处理：手写 radix-2 Cooley-Tukey FFT + overlap-save 分块 Hilbert 变换
-- 立体声独立处理，保留原始声像定位
+- 立体声独立处理，保留原始声像定位（可选关闭）
 - 循环 crossfade 消除接缝爆音
 - Canvas 实时差频包络可视化
 - 拖拽上传音频文件
+- 左右交替均衡模式（纯音/持续音 5 分钟定时交换，音乐模式循环边界交换）
+- 中/英双语 i18n 国际化
+- PWA 支持，可安装到桌面/主屏幕，离线可用
+- 移动端响应式布局 + 触摸优化
 
 ### 项目结构
 
 ```
 ├── index.html                  # 纯结构，无内联脚本/样式
-├── css/style.css               # 全部样式
+├── css/style.css               # 全部样式（含移动端响应式）
+├── manifest.json               # PWA 清单
+├── sw.js                       # Service Worker 离线缓存
+├── icons/                      # PWA 图标
 ├── js/
-│   ├── app.js                  # 应用入口，模块组装
+│   ├── app.js                  # 应用入口，模块组装，i18n 集成
 │   ├── audio-engine.js         # 音频引擎 Facade
 │   ├── modes/
 │   │   ├── base-mode.js        # 模式抽象基类 (Template Method)
-│   │   ├── pure-tone.js        # 纯音模式
-│   │   ├── music-ssb.js        # 音乐SSB频移模式
-│   │   └── drone.js            # 持续音模式
+│   │   ├── pure-tone.js        # 纯音模式（含交替定时器）
+│   │   ├── music-ssb.js        # 音乐SSB频移模式（含立体声切换）
+│   │   └── drone.js            # 持续音模式（含交替定时器）
 │   ├── ui/
 │   │   ├── visualizer.js       # Canvas波形可视化
 │   │   ├── info-panel.js       # 频段信息面板
@@ -98,6 +106,10 @@
 │   │   └── controls.js         # 控件绑定与参数读取
 │   ├── utils/
 │   │   └── freq-distribution.js # 频率分配策略 (Strategy Pattern)
+│   ├── i18n/
+│   │   ├── i18n.js             # 国际化管理器
+│   │   ├── zh.js               # 中文语言包
+│   │   └── en.js               # 英文语言包
 │   └── workers/
 │       ├── hilbert-worker.js   # FFT/Hilbert Web Worker
 │       └── ssb-worklet.js      # SSB AudioWorklet Processor
@@ -201,6 +213,22 @@ $$f_{R} - f_{L} = \Delta f \quad \text{（差频守恒）}$$
 3. **Worker/Worklet 文件独立**：不再用 Blob URL 从字符串创建，而是作为独立 `.js` 文件直接引用。调试友好（DevTools 可直接断点），也为未来 Service Worker 缓存铺路。
 
 4. **UI 模块化**：可视化、信息面板、文件处理、控件绑定各自独立，通过 `app.js` 组装。每个 UI 模块只关心自己的 DOM 交互，不直接操作音频。
+
+### 第八步：体验增强——交替均衡、立体声切换、国际化与 PWA
+
+模块化架构让新功能的添加变得清晰。
+
+1. **左右交替均衡模式**：长时间聆听时，单耳持续接收频移后的音频会产生听觉疲劳。解决方案是定时交换左右耳的频移方向。但不能简单地瞬间翻转——相位突变会产生 click。实现策略因模式而异：
+   - **纯音/持续音**：每 5 分钟通过 `linearRampToValueAtTime` 做 2.5 秒的频率渐变交换，频率连续变化避免相位不连续。数学上 ~0.2 秒的差频短暂减弱几乎不可感知。
+   - **音乐模式**：在循环边界（loop crossfade 点）自动交换。此处已有 2048 采样的交叉渐变遮罩，频率翻转被完全隐藏。AudioWorklet 和 ScriptProcessorNode 回退路径各自在 `pos` 复位时翻转 `swapped` 标志。
+
+2. **立体声保留切换**：音乐模式新增开关——当保留立体声时，对左右声道独立做 Hilbert 变换和 SSB 调制（内存和计算量翻倍但保留声像）；关闭时混缩为 mono，减少资源占用。
+
+3. **i18n 国际化**：采用轻量级方案——`js/i18n/` 下 `zh.js` 和 `en.js` 各导出一个键值对象，`i18n.js` 管理当前语言并提供 `t(key)` 函数。语言偏好存储在 `localStorage`。UI 切换时通过 `data-i18n` 属性批量更新静态文本，动态文本（频道信息、状态面板）在各模块中使用 `t()` 调用。
+
+4. **PWA 支持**：`manifest.json` 定义应用元数据，`sw.js` 实现 cache-first 离线策略缓存全部静态资源。用户可将应用"安装"到桌面或手机主屏幕，离线后仍可正常使用（音频文件需提前加载）。
+
+5. **移动端响应式**：CSS media queries 在 ≤480px 和 ≤360px 断点调整布局——预设按钮从 3 列变 2 列，频道信息纵向排列，滑块触摸区域扩大到 24px。`@media (hover: none)` 针对触摸设备优化点击目标尺寸（≥44px）。
 
 ## 参考文献
 

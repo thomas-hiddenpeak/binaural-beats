@@ -1,5 +1,6 @@
 import { BaseMode } from './base-mode.js';
-import { getMusicShifts } from '../utils/freq-distribution.js';
+import { getMusicShifts, isAlternating } from '../utils/freq-distribution.js';
+import { t } from '../i18n/i18n.js';
 
 export class MusicSSBMode extends BaseMode {
   constructor() {
@@ -12,12 +13,15 @@ export class MusicSSBMode extends BaseMode {
     this.musicBuffer = null;
     this.volNode = null;
     this.fallbackProcessor = null;
+    this.swapped = false;
+    this._lastDist = 'symmetric';
   }
 
   /** 加载并预处理音频文件 */
-  loadFile(file, ctx, onProgress, onReady, onError) {
+  loadFile(file, ctx, onProgress, onReady, onError, stereoPreserve = true) {
     this.analyticReady = false;
     this.analyticChannels = null;
+    this._stereoPreserve = stereoPreserve;
 
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -27,9 +31,20 @@ export class MusicSSBMode extends BaseMode {
         const numCh = buffer.numberOfChannels;
         const chLabel = numCh > 1 ? '立体声' : '单声道';
 
-        const channels = [];
-        for (let ch = 0; ch < numCh; ch++) {
-          channels.push(buffer.getChannelData(ch).slice());
+        let channels;
+        if (!stereoPreserve || numCh === 1) {
+          // Mono downmix
+          const mono = new Float32Array(buffer.length);
+          for (let ch = 0; ch < numCh; ch++) {
+            const src = buffer.getChannelData(ch);
+            for (let i = 0; i < mono.length; i++) mono[i] += src[i] / numCh;
+          }
+          channels = [mono];
+        } else {
+          channels = [];
+          for (let ch = 0; ch < numCh; ch++) {
+            channels.push(buffer.getChannelData(ch).slice());
+          }
         }
 
         if (this.precomputeWorker) {
@@ -84,21 +99,24 @@ export class MusicSSBMode extends BaseMode {
 
   async _doStart(ctx, params) {
     if (!this.analyticReady || !this.analyticChannels) {
-      throw new Error('请先选择音频文件并等待预处理完成');
+      throw new Error(t('needFile'));
     }
     const vol = params.volume / 100;
-    const shifts = getMusicShifts(params.beat, params.dist);
+    this.swapped = false;
+    this._lastDist = params.dist;
+    const shifts = getMusicShifts(params.beat, params.dist, this.swapped);
     const loop = params.loop;
+    const alt = isAlternating(params.dist);
 
     const canWorklet = await this._ensureWorklet(ctx);
     if (canWorklet) {
-      this._startWorklet(ctx, vol, shifts, loop);
+      this._startWorklet(ctx, vol, shifts, loop, alt);
     } else {
-      this._startFallback(ctx, vol, shifts, loop);
+      this._startFallback(ctx, vol, shifts, loop, alt, params);
     }
   }
 
-  _startWorklet(ctx, vol, shifts, loop) {
+  _startWorklet(ctx, vol, shifts, loop, alternating) {
     const chData = this.analyticChannels;
     const stereo = chData.length >= 2;
 
@@ -119,6 +137,7 @@ export class MusicSSBMode extends BaseMode {
     this.ssbWorkletNode.port.postMessage(msg, xfer);
     this.ssbWorkletNode.port.postMessage({ type: 'shifts', shiftL: shifts.left, shiftR: shifts.right });
     this.ssbWorkletNode.port.postMessage({ type: 'loop', loop });
+    this.ssbWorkletNode.port.postMessage({ type: 'alternating', alternating });
 
     this.volNode = ctx.createGain();
     this.volNode.gain.setValueAtTime(vol, ctx.currentTime);
@@ -127,7 +146,7 @@ export class MusicSSBMode extends BaseMode {
     this.nodes.push(this.volNode);
   }
 
-  _startFallback(ctx, vol, shifts, loop) {
+  _startFallback(ctx, vol, shifts, loop, alternating, params) {
     const chData = this.analyticChannels;
     const stereo = chData.length >= 2;
     const sr = ctx.sampleRate;
@@ -137,7 +156,9 @@ export class MusicSSBMode extends BaseMode {
 
     let pos = 0, phaseL = 0, phaseR = 0;
     let curSL = shifts.left, curSR = shifts.right, curLoop = loop;
+    let curAlt = alternating, fbSwapped = false;
     processor._setShifts = (sL, sR) => { curSL = sL; curSR = sR; };
+    processor._setAlternating = (alt) => { curAlt = alt; };
 
     const aLR = chData[0].real, aLI = chData[0].imag;
     const aRR = stereo ? chData[1].real : aLR;
@@ -153,8 +174,16 @@ export class MusicSSBMode extends BaseMode {
 
       for (let i = 0; i < len; i++) {
         if (pos >= dataLen) {
-          if (curLoop) { pos = cfLen; }
-          else { outL[i] = 0; outR[i] = 0; continue; }
+          if (curLoop) {
+            pos = cfLen;
+            // Swap at loop boundary for alternating mode
+            if (curAlt) {
+              fbSwapped = !fbSwapped;
+              const newSL = fbSwapped ? sR : sL;
+              const newSR = fbSwapped ? sL : sR;
+              curSL = newSL; curSR = newSR;
+            }
+          } else { outL[i] = 0; outR[i] = 0; continue; }
         }
         let rL = aLR[pos], hL = aLI[pos];
         let rR = aRR[pos], hR = aRI[pos];
@@ -166,13 +195,17 @@ export class MusicSSBMode extends BaseMode {
           rR = rR * fo + aRR[wp] * fi; hR = hR * fo + aRI[wp] * fi;
         }
 
-        if (sL === 0) outL[i] = rL;
+        const effSL = fbSwapped ? sR : sL;
+        const effSR = fbSwapped ? sL : sR;
+
+        if (effSL === 0) outL[i] = rL;
         else outL[i] = rL * Math.cos(phaseL) - hL * Math.sin(phaseL);
 
-        if (sR === 0) outR[i] = rR;
+        if (effSR === 0) outR[i] = rR;
         else outR[i] = rR * Math.cos(phaseR) - hR * Math.sin(phaseR);
 
-        phaseL += pIL; phaseR += pIR;
+        phaseL += TWO_PI * effSL / sr;
+        phaseR += TWO_PI * effSR / sr;
         if (phaseL > TWO_PI) phaseL -= TWO_PI;
         else if (phaseL < -TWO_PI) phaseL += TWO_PI;
         if (phaseR > TWO_PI) phaseR -= TWO_PI;
@@ -199,17 +232,27 @@ export class MusicSSBMode extends BaseMode {
     }
     this.fallbackProcessor = null;
     this.volNode = null;
+    this.swapped = false;
   }
 
   _doUpdate(ctx, params) {
     const vol = params.volume / 100;
-    const shifts = getMusicShifts(params.beat, params.dist);
+    const alt = isAlternating(params.dist);
+    const shifts = getMusicShifts(params.beat, params.dist, this.swapped);
+
+    // If dist strategy changed, notify worklet/fallback
+    if (params.dist !== this._lastDist) {
+      this._lastDist = params.dist;
+      this.swapped = false;
+    }
 
     if (this.ssbWorkletNode) {
       this.ssbWorkletNode.port.postMessage({ type: 'shifts', shiftL: shifts.left, shiftR: shifts.right });
+      this.ssbWorkletNode.port.postMessage({ type: 'alternating', alternating: alt });
     }
-    if (this.fallbackProcessor && this.fallbackProcessor._setShifts) {
-      this.fallbackProcessor._setShifts(shifts.left, shifts.right);
+    if (this.fallbackProcessor) {
+      if (this.fallbackProcessor._setShifts) this.fallbackProcessor._setShifts(shifts.left, shifts.right);
+      if (this.fallbackProcessor._setAlternating) this.fallbackProcessor._setAlternating(alt);
     }
     if (this.volNode) {
       this.volNode.gain.setValueAtTime(vol, ctx.currentTime);
@@ -217,21 +260,23 @@ export class MusicSSBMode extends BaseMode {
   }
 
   getChannelInfo(params) {
-    const shifts = getMusicShifts(params.beat, params.dist);
-    if (params.dist === 'symmetric') {
+    const shifts = getMusicShifts(params.beat, params.dist, this.swapped);
+    const alt = isAlternating(params.dist);
+    const swapInd = alt ? ' ↔' : '';
+    if (params.dist === 'symmetric' || alt) {
       return {
-        left: '左耳: 频移 ' + shifts.left.toFixed(1) + ' Hz',
-        right: '右耳: 频移 +' + shifts.right.toFixed(1) + ' Hz'
+        left: t('leftEar') + ': ' + t('freqShift') + ' ' + shifts.left.toFixed(1) + ' Hz' + swapInd,
+        right: t('rightEar') + ': ' + t('freqShift') + ' +' + shifts.right.toFixed(1) + ' Hz' + swapInd
       };
     } else if (params.dist === 'left') {
       return {
-        left: '左耳: 频移 ' + shifts.left.toFixed(1) + ' Hz',
-        right: '右耳: 原始音频'
+        left: t('leftEar') + ': ' + t('freqShift') + ' ' + shifts.left.toFixed(1) + ' Hz',
+        right: t('rightEar') + ': ' + t('original')
       };
     }
     return {
-      left: '左耳: 原始音频',
-      right: '右耳: 频移 +' + shifts.right.toFixed(1) + ' Hz'
+      left: t('leftEar') + ': ' + t('original'),
+      right: t('rightEar') + ': ' + t('freqShift') + ' +' + shifts.right.toFixed(1) + ' Hz'
     };
   }
 

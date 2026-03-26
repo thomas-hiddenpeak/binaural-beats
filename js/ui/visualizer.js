@@ -1,6 +1,8 @@
 /**
  * Visualizer — 波形可视化模块
  */
+import { t } from '../i18n/i18n.js';
+
 export class Visualizer {
   constructor(canvasId) {
     this.canvas = document.getElementById(canvasId);
@@ -65,8 +67,8 @@ export class Visualizer {
       // Label
       ctx.fillStyle = 'rgba(255,255,255,0.25)';
       ctx.font = '18px sans-serif';
-      const modeLabel = modeName === 'music' ? '音乐' : modeName === 'drone' ? '持续音' : '纯音';
-      ctx.fillText(modeLabel + ' · 差频包络 ' + beat + ' Hz', 10, 24);
+      const modeLabel = modeName === 'music' ? t('vizMusic') : modeName === 'drone' ? t('vizDrone') : t('vizPure');
+      ctx.fillText(modeLabel + ' · ' + t('vizEnvelope') + ' ' + beat + ' Hz', 10, 24);
 
       this.animId = requestAnimationFrame(draw);
     };
@@ -86,7 +88,7 @@ export class Visualizer {
     const ctx = this.ctx2d;
     ctx.fillStyle = 'rgba(255,255,255,0.15)';
     ctx.font = '18px sans-serif';
-    ctx.fillText('点击开始后显示波形', 10, this.canvas.height / 2 + 5);
+    ctx.fillText(t('vizWaiting'), 10, this.canvas.height / 2 + 5);
   }
 
   _resize() {

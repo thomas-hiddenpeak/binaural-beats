@@ -8,6 +8,7 @@ class SSBProcessor extends AudioWorkletProcessor {
     this.sL = 0; this.sR = 5; this.loop = true;
     this.dLen = 0; this.cfLen = 2048;
     this.ready = false; this.active = true;
+    this.alternating = false; this.swapped = false;
 
     this.port.onmessage = (e) => {
       const d = e.data;
@@ -29,6 +30,9 @@ class SSBProcessor extends AudioWorkletProcessor {
         this.sR = d.shiftR;
       } else if (d.type === 'loop') {
         this.loop = d.loop;
+      } else if (d.type === 'alternating') {
+        this.alternating = d.alternating;
+        if (!d.alternating) this.swapped = false;
       } else if (d.type === 'stop') {
         this.active = false;
       }
@@ -51,7 +55,10 @@ class SSBProcessor extends AudioWorkletProcessor {
 
     for (let i = 0; i < len; i++) {
       if (this.pos >= dL) {
-        if (this.loop) { this.pos = cf; }
+        if (this.loop) {
+          this.pos = cf;
+          if (this.alternating) this.swapped = !this.swapped;
+        }
         else { outL[i] = 0; outR[i] = 0; continue; }
       }
 
@@ -66,14 +73,17 @@ class SSBProcessor extends AudioWorkletProcessor {
         rR = rR * fo + aRR[wp] * fi; hR = hR * fo + aRI[wp] * fi;
       }
 
-      // SSB frequency shift
-      if (sL === 0) outL[i] = rL;
+      // SSB frequency shift (swap if alternating)
+      const effSL = this.swapped ? sR : sL;
+      const effSR = this.swapped ? sL : sR;
+
+      if (effSL === 0) outL[i] = rL;
       else outL[i] = rL * Math.cos(this.phL) - hL * Math.sin(this.phL);
 
-      if (sR === 0) outR[i] = rR;
+      if (effSR === 0) outR[i] = rR;
       else outR[i] = rR * Math.cos(this.phR) - hR * Math.sin(this.phR);
 
-      this.phL += pIL; this.phR += pIR;
+      this.phL += T * effSL / sr; this.phR += T * effSR / sr;
       if (this.phL > T) this.phL -= T;
       else if (this.phL < -T) this.phL += T;
       if (this.phR > T) this.phR -= T;

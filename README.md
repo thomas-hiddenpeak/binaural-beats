@@ -2,7 +2,7 @@
 
 An open-source, interactive binaural beats experience tool. Pure frontend, zero dependencies, runs directly in the browser.
 
-**👉 [Live Demo](https://thomas-hiddenpeak.github.io/binaural-beats/)** · [中文说明](docs/zh/science.md)
+**👉 [Live Demo](https://thomas-hiddenpeak.github.io/binaural-beats/)** · [中文版 README](README.zh.md)
 
 > **Headphones required.** Binaural beats rely on delivering different frequencies to each ear — speakers won't work.
 
@@ -94,7 +94,8 @@ Pure frontend, zero backend, ES Modules architecture:
 ├── docs/
 │   ├── en/                     # English documentation
 │   └── zh/                     # 中文文档
-└── README.md
+├── README.md                   # English (default)
+└── README.zh.md                # 中文版
 ```
 
 ## 📖 Documentation

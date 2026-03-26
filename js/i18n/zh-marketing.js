@@ -94,6 +94,7 @@ export default {
   needFile: '请上传您的专属疗愈音源并等待能量校准完成',
   audioFail: '能量场启动异常，请调整意识状态后重试',
 
-  // Edition switch
-  editionSwitch: '📉 降级到没有灵魂的版本',
+  // Edition switch (marketing → mystic / science)
+  editionSwitch1: '🔮 不够？试试开光加持版',
+  editionSwitch2: '📉 降级到没有灵魂的版本',
 };

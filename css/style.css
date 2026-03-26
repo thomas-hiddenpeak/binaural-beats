@@ -270,7 +270,7 @@ body.marketing .band-collapse { color: #ff6aff; }
 
 /* Edition switch button */
 .edition-btn {
-  display: block; margin: 12px auto 0; padding: 8px 20px;
+  padding: 8px 20px;
   border-radius: 8px; border: 1px dashed #2a2a4a;
   background: transparent; color: #666; font-size: 0.82em;
   cursor: pointer; transition: all 0.2s;
@@ -305,3 +305,151 @@ body.marketing .marketing-stats { display: block; }
   transition: width 1s ease;
 }
 .marketing-stats .stat-label { color: #8a6aaf; }
+
+/* ======================================
+   Mystic / Spiritual Guru Edition Theme
+   ====================================== */
+
+body.mystic {
+  background: linear-gradient(180deg, #0c0400 0%, #1a0a00 40%, #0e0600 100%);
+}
+
+/* Incense smoke / mandala overlay */
+body.mystic::before {
+  content: '';
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: radial-gradient(3px 3px at 25% 25%, rgba(255,165,0,0.12), transparent),
+              radial-gradient(2px 2px at 50% 50%, rgba(255,200,50,0.08), transparent),
+              radial-gradient(2px 2px at 75% 35%, rgba(200,100,20,0.1), transparent),
+              radial-gradient(1px 1px at 15% 70%, rgba(255,215,0,0.1), transparent),
+              radial-gradient(2px 2px at 85% 65%, rgba(180,80,0,0.08), transparent),
+              radial-gradient(1px 1px at 45% 85%, rgba(255,180,50,0.06), transparent);
+  pointer-events: none; z-index: 0;
+}
+
+body.mystic > * { position: relative; z-index: 1; }
+
+body.mystic h1 { color: #ff9900; }
+body.mystic .subtitle { color: #daa520; }
+
+body.mystic .warning {
+  background: linear-gradient(135deg, #1a0800, #0e0400);
+  border-color: #c87020; color: #ff9900;
+}
+
+body.mystic .container {
+  background: linear-gradient(180deg, #1a0e02, #100800);
+  border: 1px solid rgba(200,112,32,0.2);
+  box-shadow: 0 4px 32px rgba(200,112,32,0.12), 0 0 80px rgba(255,153,0,0.05);
+}
+
+body.mystic .lang-btn {
+  border-color: #4a2800; background: #2a1600; color: #ff9900;
+}
+body.mystic .lang-btn:hover { background: #3a2000; border-color: #ff9900; }
+
+body.mystic .tab-btn {
+  border-color: #4a2800; background: #2a1600; color: #c88040;
+}
+body.mystic .tab-btn.active {
+  background: linear-gradient(135deg, #4a2000, #2a1000);
+  color: #ff9900; border-color: #ff9900;
+}
+body.mystic .tab-btn:hover { background: #3a2000; color: #ff9900; }
+
+body.mystic .play-btn.off {
+  background: linear-gradient(135deg, #c87020, #8a4010, #ff9900);
+  background-size: 200% 200%;
+  animation: mysticGlow 4s ease-in-out infinite;
+  color: #fff; text-shadow: 0 0 10px rgba(255,153,0,0.5);
+}
+body.mystic .play-btn.on {
+  background: linear-gradient(135deg, #c87020, #8a4010);
+  box-shadow: 0 0 20px rgba(200,112,32,0.4);
+}
+
+@keyframes mysticGlow {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+body.mystic .control-label .name { color: #daa520; }
+body.mystic .control-label .value { color: #ff9900; font-weight: 700; }
+
+body.mystic input[type="range"] { background: #2a1600; }
+body.mystic input[type="range"]::-webkit-slider-thumb {
+  background: linear-gradient(135deg, #ff9900, #c87020);
+  box-shadow: 0 0 8px rgba(255,153,0,0.5);
+}
+
+body.mystic select {
+  background: #2a1600; border-color: #4a2800; color: #ff9900;
+}
+
+body.mystic .file-area {
+  border-color: #4a2800; color: #a06830;
+  background: rgba(42,22,0,0.3);
+}
+body.mystic .file-area:hover { border-color: #ff9900; color: #ff9900; }
+body.mystic .file-area.loaded { border-color: #ff9900; color: #ff9900; }
+
+body.mystic .ch-left { background: #1a0800; color: #ff9900; }
+body.mystic .ch-right { background: #1a0800; color: #daa520; }
+
+body.mystic canvas { background: #080400; }
+
+body.mystic .info-panel {
+  background: linear-gradient(135deg, #1a0800, #0a0400);
+  border: 1px solid rgba(200,112,32,0.15);
+}
+
+body.mystic .preset-btn {
+  border-color: #4a2800; background: #2a1600; color: #ff9900;
+}
+body.mystic .preset-btn:hover {
+  background: linear-gradient(135deg, #3a1800, #2a1000);
+  border-color: #ff9900; color: #fff;
+}
+body.mystic .preset-btn .freq { color: #ff9900; }
+body.mystic .preset-btn .desc { color: #daa520; }
+
+body.mystic .band-delta { color: #ff9900; }
+body.mystic .band-theta { color: #c87020; }
+body.mystic .band-alpha { color: #ff9900; }
+body.mystic .band-beta { color: #ffb340; }
+body.mystic .band-collapse { color: #ff6600; }
+
+body.mystic .edition-btn {
+  border-color: #4a2800; color: #a06830;
+}
+body.mystic .edition-btn:hover {
+  border-color: #ff9900; color: #ff9900;
+}
+
+/* Mystic fake stats bar */
+.mystic-stats {
+  display: none; margin-top: 8px; padding: 10px 12px;
+  background: linear-gradient(135deg, #1a0800, #0a0400);
+  border: 1px solid rgba(200,112,32,0.15); border-radius: 8px;
+  font-size: 0.78em; line-height: 1.8; color: #daa520;
+}
+body.mystic .mystic-stats { display: block; }
+
+.mystic-stats .stat-value { color: #ff9900; font-weight: 700; }
+.mystic-stats .stat-bar {
+  display: inline-block; width: 80px; height: 8px;
+  background: #1a0800; border-radius: 4px; vertical-align: middle;
+  margin-left: 4px; overflow: hidden;
+}
+.mystic-stats .stat-fill {
+  height: 100%; border-radius: 4px;
+  background: linear-gradient(90deg, #c87020, #ff9900);
+  transition: width 1s ease;
+}
+.mystic-stats .stat-label { color: #a06830; }
+
+/* Edition switch: two buttons side by side */
+.edition-btns {
+  display: flex; gap: 8px; justify-content: center; margin-top: 12px;
+}
+.edition-btns .edition-btn { margin: 0; }

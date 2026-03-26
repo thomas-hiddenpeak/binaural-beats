@@ -140,9 +140,23 @@
     <div>💫 <span class="stat-label" data-mstat="energy">累计能量:</span> <span class="stat-value" id="mstatEnergy">0</span> <span class="stat-label" data-mstat="unit">光子单位</span></div>
     <div><br>⚡ <span class="stat-label" id="mstatStatus" data-mstat="status">等待启动脑波校准...</span></div>
   </div>
+
+  <!-- Mystic fake stats (only visible in mystic edition) -->
+  <div class="mystic-stats" id="mysticStats">
+    <div>🙏 <span class="stat-label" data-xstat="chakra">脉轮激活:</span> <span class="stat-value" id="xstatChakra">第1轮</span> <span class="stat-bar"><span class="stat-fill" id="xstatChakraBar" style="width:14%"></span></span></div>
+    <div>👁 <span class="stat-label" data-xstat="thirdEye">天眼开度:</span> <span class="stat-value" id="xstatThirdEye">0%</span></div>
+    <div>🌟 <span class="stat-label" data-xstat="astral">灵体出窍:</span> <span class="stat-value" id="xstatAstral">0%</span></div>
+    <div>🔮 <span class="stat-label" data-xstat="pastLife">前世记忆:</span> <span class="stat-value" id="xstatPastLife">0</span> <span class="stat-label" data-xstat="pastLifeUnit">碎片</span></div>
+    <div>📡 <span class="stat-label" data-xstat="guide">指导灵信号:</span> <span class="stat-value" id="xstatGuide">---</span></div>
+    <div>☸️ <span class="stat-label" data-xstat="karma">业力净化:</span> <span class="stat-value" id="xstatKarma">0%</span></div>
+    <div><br>🕉 <span class="stat-label" id="xstatStatus" data-xstat="status">灵体待唤醒...</span></div>
+  </div>
 </div>
 
-<button class="edition-btn" id="editionBtn">🛒 看看智商税版本</button>
+<div class="edition-btns">
+  <button class="edition-btn" id="editionBtn1">🛒 看看智商税版本</button>
+  <button class="edition-btn" id="editionBtn2">🔮 看看神棍版本</button>
+</div>
 
 <script type="module" src="js/app.js"></script>
 <script>

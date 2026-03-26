@@ -94,6 +94,7 @@ export default {
   needFile: 'Please upload your healing audio and wait for energy calibration',
   audioFail: 'Energy field anomaly — please adjust your consciousness state and retry',
 
-  // Edition switch
-  editionSwitch: '📉 Downgrade to Soulless Version',
+  // Edition switch (marketing → mystic / science)
+  editionSwitch1: '🔮 Not Enough? Try the Blessed Version',
+  editionSwitch2: '📉 Downgrade to Soulless Version',
 };

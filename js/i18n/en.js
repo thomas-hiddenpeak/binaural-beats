@@ -90,6 +90,7 @@ export default {
   needFile: 'Please select an audio file and wait for processing to complete',
   audioFail: 'Failed to start audio',
 
-  // Edition switch
-  editionSwitch: '🛒 See the Snake Oil Version',
+  // Edition switch (science → marketing / mystic)
+  editionSwitch1: '🛒 See the Snake Oil Version',
+  editionSwitch2: '🔮 See the Spiritual Guru Version',
 };

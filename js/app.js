@@ -7,7 +7,7 @@ import { Visualizer } from './ui/visualizer.js';
 import { InfoPanel } from './ui/info-panel.js';
 import { FileHandler } from './ui/file-handler.js';
 import { Controls } from './ui/controls.js';
-import { t, getLang, setLang, onLangChange, getEdition, setEdition, isMarketing, onEditionChange } from './i18n/i18n.js';
+import { t, getLang, setLang, onLangChange, getEdition, setEdition, isMarketing, isMystic, onEditionChange } from './i18n/i18n.js';
 
 class App {
   constructor() {
@@ -22,6 +22,7 @@ class App {
     this._initLangSwitcher();
     this._initEditionSwitcher();
     this._initMarketingStats();
+    this._initMysticStats();
 
     // 初始状态
     this.applyEdition();
@@ -82,28 +83,43 @@ class App {
   }
 
   _initEditionSwitcher() {
-    const btn = document.getElementById('editionBtn');
-    btn.addEventListener('click', () => {
-      setEdition(isMarketing() ? 'science' : 'marketing');
+    // Edition cycle maps: each edition has two buttons pointing to the other two
+    const editionMap = {
+      science:   { btn1: 'marketing', btn2: 'mystic' },
+      marketing: { btn1: 'mystic',    btn2: 'science' },
+      mystic:    { btn1: 'marketing', btn2: 'science' }
+    };
+    const btn1 = document.getElementById('editionBtn1');
+    const btn2 = document.getElementById('editionBtn2');
+    btn1.addEventListener('click', () => {
+      const targets = editionMap[getEdition()];
+      setEdition(targets.btn1);
+    });
+    btn2.addEventListener('click', () => {
+      const targets = editionMap[getEdition()];
+      setEdition(targets.btn2);
     });
     onEditionChange(() => {
       this.applyEdition();
       this.applyI18n();
       this.updateParams();
       this.visualizer.clear();
-      // Start/stop marketing stats if playing
-      if (this.engine.isPlaying && isMarketing()) {
-        this._startMarketingStats();
-      } else {
-        this._stopMarketingStats();
+      // Start/stop fake stats based on edition and play state
+      this._stopMarketingStats();
+      this._stopMysticStats();
+      if (this.engine.isPlaying) {
+        if (isMarketing()) this._startMarketingStats();
+        if (isMystic()) this._startMysticStats();
       }
     });
   }
 
   applyEdition() {
-    const marketing = isMarketing();
-    document.body.classList.toggle('marketing', marketing);
-    document.getElementById('editionBtn').textContent = t('editionSwitch');
+    const edition = getEdition();
+    document.body.classList.toggle('marketing', edition === 'marketing');
+    document.body.classList.toggle('mystic', edition === 'mystic');
+    document.getElementById('editionBtn1').textContent = t('editionSwitch1');
+    document.getElementById('editionBtn2').textContent = t('editionSwitch2');
   }
 
   _initMarketingStats() {
@@ -213,6 +229,109 @@ class App {
     });
   }
 
+  // --- Mystic stats ---
+  _initMysticStats() {
+    this._xstatTimer = null;
+    this._xstatPastLife = 0;
+  }
+
+  _startMysticStats() {
+    if (this._xstatTimer) return;
+    this._xstatPastLife = 0;
+    this._xstatTick();
+    this._xstatTimer = setInterval(() => this._xstatTick(), 2500);
+  }
+
+  _stopMysticStats() {
+    if (this._xstatTimer) { clearInterval(this._xstatTimer); this._xstatTimer = null; }
+    const resetMap = { xstatChakra: '第1轮', xstatThirdEye: '0%', xstatAstral: '0%', xstatPastLife: '0', xstatGuide: '---', xstatKarma: '0%' };
+    for (const [id, val] of Object.entries(resetMap)) {
+      const el = document.getElementById(id);
+      if (el) el.textContent = val;
+    }
+    const bar = document.getElementById('xstatChakraBar');
+    if (bar) bar.style.width = '14%';
+    const status = document.getElementById('xstatStatus');
+    if (status) {
+      status.textContent = getLang() === 'zh' ? '灵体待唤醒...' : 'Soul body awaiting awakening...';
+    }
+    this._updateMysticLabels();
+  }
+
+  _xstatTick() {
+    if (!isMystic() || !this.engine.isPlaying) return;
+    const lang = getLang();
+
+    // Chakra level 1-7
+    const chakra = Math.ceil(Math.random() * 7);
+    const chakraNames = lang === 'zh'
+      ? ['海底轮', '生殖轮', '太阳轮', '心轮', '喉轮', '眉心轮', '顶轮']
+      : ['Root', 'Sacral', 'Solar', 'Heart', 'Throat', 'Third Eye', 'Crown'];
+    document.getElementById('xstatChakra').textContent = `第${chakra}轮 · ${chakraNames[chakra - 1]}`;
+    document.getElementById('xstatChakraBar').style.width = (chakra / 7 * 100).toFixed(0) + '%';
+
+    // Third eye aperture
+    const thirdEye = (50 + Math.random() * 45).toFixed(1);
+    document.getElementById('xstatThirdEye').textContent = thirdEye + '%';
+
+    // Astral projection
+    const astral = (30 + Math.random() * 60).toFixed(1);
+    document.getElementById('xstatAstral').textContent = astral + '%';
+
+    // Past life fragments accumulator
+    this._xstatPastLife += Math.floor(1 + Math.random() * 3);
+    document.getElementById('xstatPastLife').textContent = this._xstatPastLife + ' ' + t('mysticPastLifeUnit');
+
+    // Spirit guide signal
+    const signals = lang === 'zh'
+      ? ['微弱', '若隐若现', '清晰', '强烈', '已连接', '正在传讯']
+      : ['Faint', 'Flickering', 'Clear', 'Strong', 'Connected', 'Transmitting'];
+    document.getElementById('xstatGuide').textContent = signals[Math.floor(Math.random() * signals.length)];
+
+    // Karma purification
+    const karma = (40 + Math.random() * 55).toFixed(1);
+    document.getElementById('xstatKarma').textContent = karma + '%';
+
+    // Status messages
+    const zhStatuses = [
+      '🕉 昆达里尼能量正沿脊柱上升...',
+      '🙏 你的指导灵正在尝试传讯...',
+      '👁 第三眼松果体正在分泌DMT...',
+      '🌟 前世记忆碎片正在浮现...',
+      '☸️ 累世业力正在加速净化...',
+      '🔮 灵体正在尝试从肉身抽离...',
+      '📡 接收到来自昴宿星的高频信号...',
+      '💜 心轮莲花正在徐徐绽放...',
+    ];
+    const enStatuses = [
+      '🕉 Kundalini energy rising along the spine...',
+      '🙏 Your spirit guide is attempting to transmit...',
+      '👁 Third eye pineal gland secreting DMT...',
+      '🌟 Past-life memory fragments surfacing...',
+      '☸️ Karmic debt from past lives purifying...',
+      '🔮 Soul body attempting to detach from physical form...',
+      '📡 Receiving high-frequency signal from the Pleiades...',
+      '💜 Heart chakra lotus slowly blooming...',
+    ];
+    const statuses = lang === 'zh' ? zhStatuses : enStatuses;
+    document.getElementById('xstatStatus').textContent = statuses[Math.floor(Math.random() * statuses.length)];
+
+    this._updateMysticLabels();
+  }
+
+  _updateMysticLabels() {
+    const labels = document.querySelectorAll('[data-xstat]');
+    const keyMap = {
+      chakra: 'mysticChakra', thirdEye: 'mysticThirdEye', astral: 'mysticAstral',
+      pastLife: 'mysticPastLife', guide: 'mysticGuide', karma: 'mysticKarma',
+      pastLifeUnit: 'mysticPastLifeUnit', guideUnit: 'mysticGuideUnit'
+    };
+    labels.forEach(el => {
+      const key = el.getAttribute('data-xstat');
+      if (key !== 'status' && keyMap[key]) el.textContent = t(keyMap[key]);
+    });
+  }
+
   applyI18n() {
     const lang = getLang();
     document.getElementById('langBtn').textContent = lang === 'zh' ? 'EN' : '中文';
@@ -276,11 +395,13 @@ class App {
       if (presetKeys[i]) el.textContent = t(presetKeys[i]);
     });
 
-    // Edition button
-    document.getElementById('editionBtn').textContent = t('editionSwitch');
+    // Edition buttons
+    document.getElementById('editionBtn1').textContent = t('editionSwitch1');
+    document.getElementById('editionBtn2').textContent = t('editionSwitch2');
 
-    // Marketing stats labels (update for current language)
+    // Fake stats labels (update for current language)
     this._updateMarketingLabels();
+    this._updateMysticLabels();
   }
 
   async togglePlay() {
@@ -289,6 +410,7 @@ class App {
       this.controls.setPlaying(false);
       this.visualizer.stop();
       this._stopMarketingStats();
+      this._stopMysticStats();
     } else {
       try {
         const params = this.controls.getParams(this.engine.currentModeName);
@@ -300,6 +422,7 @@ class App {
         );
         this.updateParams();
         if (isMarketing()) this._startMarketingStats();
+        if (isMystic()) this._startMysticStats();
       } catch (e) {
         console.error('Start audio error:', e);
         alert(e.message || t('audioFail'));

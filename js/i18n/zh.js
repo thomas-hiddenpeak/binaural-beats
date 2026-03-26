@@ -90,6 +90,7 @@ export default {
   needFile: '请先选择音频文件并等待预处理完成',
   audioFail: '音频启动失败',
 
-  // Edition switch
-  editionSwitch: '🛒 看看智商税版本',
+  // Edition switch (science → marketing / mystic)
+  editionSwitch1: '🛒 看看智商税版本',
+  editionSwitch2: '🔮 看看神棍版本',
 };

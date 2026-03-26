@@ -132,6 +132,7 @@ class App {
       const lang = getLang();
       status.textContent = lang === 'zh' ? '等待启动脑波校准...' : 'Awaiting neural calibration...';
     }
+    this._updateMarketingLabels();
   }
 
   _mstatTick() {
@@ -189,6 +190,22 @@ class App {
     } : {
       sync: 'Brain Wave Sync:', pineal: 'Pineal Activation:', dimension: 'Consciousness Dim:',
       energy: 'Accumulated Energy:', unit: 'photon units', status: ''
+    };
+    labels.forEach(el => {
+      const key = el.getAttribute('data-mstat');
+      if (key !== 'status' && mstatMap[key]) el.textContent = mstatMap[key];
+    });
+  }
+
+  _updateMarketingLabels() {
+    const lang = getLang();
+    const labels = document.querySelectorAll('[data-mstat]');
+    const mstatMap = lang === 'zh' ? {
+      sync: '脑波同步率:', pineal: '松果体激活度:', dimension: '意识维度:',
+      energy: '累计能量:', unit: '光子单位'
+    } : {
+      sync: 'Brain Wave Sync:', pineal: 'Pineal Activation:', dimension: 'Consciousness Dim:',
+      energy: 'Accumulated Energy:', unit: 'photon units'
     };
     labels.forEach(el => {
       const key = el.getAttribute('data-mstat');
@@ -261,6 +278,9 @@ class App {
 
     // Edition button
     document.getElementById('editionBtn').textContent = t('editionSwitch');
+
+    // Marketing stats labels (update for current language)
+    this._updateMarketingLabels();
   }
 
   async togglePlay() {

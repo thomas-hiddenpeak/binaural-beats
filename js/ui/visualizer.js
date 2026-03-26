@@ -17,7 +17,7 @@ export class Visualizer {
 
     const draw = () => {
       const beat = getParams().beat;
-      const t = (performance.now() - this.startTime) / 1000;
+      const elapsed = (performance.now() - this.startTime) / 1000;
       const w = this.canvas.width, h = this.canvas.height;
       const ctx = this.ctx2d;
       ctx.clearRect(0, 0, w, h);
@@ -31,7 +31,7 @@ export class Visualizer {
       ctx.strokeStyle = color;
       ctx.lineWidth = 3;
       for (let x = 0; x < w; x++) {
-        const tx = t + (x / w) * periods;
+        const tx = elapsed + (x / w) * periods;
         const env = Math.cos(2 * Math.PI * beat * tx);
         const y = h / 2 - env * h * 0.35;
         x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
@@ -50,7 +50,7 @@ export class Visualizer {
       ctx.strokeStyle = color.replace('0.6', '0.25');
       ctx.lineWidth = 2;
       for (let x = 0; x < w; x++) {
-        const tx = t + (x / w) * periods;
+        const tx = elapsed + (x / w) * periods;
         const env = -Math.cos(2 * Math.PI * beat * tx);
         const y = h / 2 - env * h * 0.35;
         x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);

@@ -4,6 +4,20 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>双耳拍体验器 Pro</title>
+<script>
+// Set title as early as possible to avoid flashing the science title.
+(function(){
+  var params = new URLSearchParams(location.search);
+  var edition = params.get('edition') || localStorage.getItem('bb-edition') || 'science';
+  var lang = localStorage.getItem('bb-lang') || 'zh';
+  var titleMap = {
+    science: { zh: '双耳拍体验器 Pro', en: 'Binaural Beat Explorer Pro' },
+    marketing: { zh: 'NeuroTune™ 脑波大师', en: 'NeuroTune™ Brain Wave Master' },
+    mystic: { zh: '天音灵频™ 觉醒法器', en: 'Divine Frequency™ Awakening Portal' }
+  };
+  document.title = (titleMap[edition] && titleMap[edition][lang]) || titleMap.science.zh;
+})();
+</script>
 <meta name="description" content="Binaural Beat Explorer — 纯音 · 音乐频移 · 持续音">
 <meta name="theme-color" content="#0a0a1a">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -15,18 +29,11 @@
 </head>
 <body class="init-pending">
 <script>
-// Apply edition class/title before first paint to prevent init flash
+// Apply edition class before first paint to prevent init flash
 (function(){
   var params = new URLSearchParams(location.search);
   var edition = params.get('edition') || localStorage.getItem('bb-edition') || 'science';
-  var lang = localStorage.getItem('bb-lang') || 'zh';
-  var titleMap = {
-    science: { zh: '双耳拍体验器 Pro', en: 'Binaural Beat Explorer Pro' },
-    marketing: { zh: 'NeuroTune™ 脑波大师', en: 'NeuroTune™ Brain Wave Master' },
-    mystic: { zh: '天音灵频™ 觉醒法器', en: 'Divine Frequency™ Awakening Portal' }
-  };
   if (edition === 'marketing' || edition === 'mystic') document.body.classList.add(edition);
-  document.title = (titleMap[edition] && titleMap[edition][lang]) || titleMap.science.zh;
   if (params.get('edition')) {
     document.documentElement.dataset.linked = '1';
   }

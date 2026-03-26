@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>双耳拍体验器</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #0a0a1a;
+    color: #e0e0e0;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px;
+  }
+  h1 { color: #7eb8ff; margin-bottom: 8px; font-size: 1.8em; }
+  .subtitle { color: #888; margin-bottom: 24px; font-size: 0.9em; }
+  .warning {
+    background: #2a1a00;
+    border: 1px solid #664400;
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 20px;
+    max-width: 600px;
+    font-size: 0.85em;
+    color: #ffaa44;
+    line-height: 1.5;
+  }
+  .container {
+    background: #12122a;
+    border-radius: 16px;
+    padding: 28px;
+    max-width: 640px;
+    width: 100%;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+  }
+  .play-btn {
+    width: 100%;
+    padding: 16px;
+    font-size: 1.3em;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-weight: 600;
+    letter-spacing: 1px;
+  }
+  .play-btn.off {
+    background: linear-gradient(135deg, #2a5298, #1e3c72);
+    color: #fff;
+  }
+  .play-btn.on {
+    background: linear-gradient(135deg, #c0392b, #96281b);
+    color: #fff;
+  }
+  .play-btn:hover { transform: scale(1.01); filter: brightness(1.15); }
+
+  .controls { margin-top: 24px; }
+  .control-group {
+    margin-bottom: 20px;
+  }
+  .control-label {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 6px;
+  }
+  .control-label .name { font-size: 0.95em; color: #aaa; }
+  .control-label .value { font-size: 1.1em; color: #7eb8ff; font-weight: 600; font-variant-numeric: tabular-nums; }
+  input[type="range"] {
+    -webkit-appearance: none;
+    width: 100%;
+    height: 6px;
+    border-radius: 3px;
+    background: #1e1e3a;
+    outline: none;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #7eb8ff;
+    cursor: pointer;
+    box-shadow: 0 0 8px rgba(126,184,255,0.4);
+  }
+
+  .presets {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    margin-top: 20px;
+  }
+  .preset-btn {
+    padding: 10px 8px;
+    border: 1px solid #2a2a4a;
+    border-radius: 8px;
+    background: #1a1a32;
+    color: #ccc;
+    cursor: pointer;
+    font-size: 0.82em;
+    transition: all 0.15s;
+    text-align: center;
+    line-height: 1.4;
+  }
+  .preset-btn:hover {
+    background: #252548;
+    border-color: #7eb8ff;
+    color: #fff;
+  }
+  .preset-btn .freq { font-weight: 700; color: #7eb8ff; font-size: 1.1em; }
+  .preset-btn .desc { color: #888; font-size: 0.85em; }
+
+  .info-panel {
+    margin-top: 20px;
+    padding: 14px;
+    background: #0e0e20;
+    border-radius: 10px;
+    font-size: 0.85em;
+    line-height: 1.7;
+  }
+  .info-panel .band { font-weight: 700; }
+  .band-delta { color: #b07aff; }
+  .band-theta { color: #5aafff; }
+  .band-alpha { color: #4adf8a; }
+  .band-beta { color: #ffe44a; }
+  .band-collapse { color: #ff6a6a; }
+
+  canvas {
+    width: 100%;
+    height: 100px;
+    margin-top: 16px;
+    border-radius: 8px;
+    background: #0a0a18;
+  }
+
+  .channel-info {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 12px;
+    font-size: 0.82em;
+    color: #666;
+  }
+  .channel-info span { padding: 4px 10px; border-radius: 4px; }
+  .ch-left { background: #1a1a2e; color: #ff7eb3; }
+  .ch-right { background: #1a1a2e; color: #7effd1; }
+</style>
+</head>
+<body>
+
+<h1>🎧 双耳拍体验器</h1>
+<p class="subtitle">Binaural Beat Explorer</p>
+
+<div class="warning">
+  ⚠️ <strong>必须佩戴耳机！</strong>左右耳需要分别听到不同频率才能产生双耳拍效果。用扬声器无效。<br>
+  建议以较低音量开始，根据舒适度调节。
+</div>
+
+<div class="container">
+  <button class="play-btn off" id="playBtn" onclick="togglePlay()">
+    ▶ 戴上耳机，点击开始
+  </button>
+
+  <div class="controls">
+    <div class="control-group">
+      <div class="control-label">
+        <span class="name">载波频率（两耳中心频率）</span>
+        <span class="value" id="carrierVal">400 Hz</span>
+      </div>
+      <input type="range" id="carrier" min="80" max="1000" value="200" step="10" oninput="updateParams()">
+    </div>
+
+    <div class="control-group">
+      <div class="control-label">
+        <span class="name">差频（双耳拍频率）</span>
+        <span class="value" id="beatVal">10 Hz</span>
+      </div>
+      <input type="range" id="beat" min="1" max="50" value="10" step="0.5" oninput="updateParams()">
+    </div>
+
+    <div class="control-group">
+      <div class="control-label">
+        <span class="name">音量</span>
+        <span class="value" id="volVal">30%</span>
+      </div>
+      <input type="range" id="volume" min="0" max="100" value="30" step="1" oninput="updateParams()">
+    </div>
+  </div>
+
+  <div class="channel-info">
+    <span class="ch-left" id="leftInfo">左耳: 395 Hz</span>
+    <span class="ch-right" id="rightInfo">右耳: 405 Hz</span>
+  </div>
+
+  <canvas id="waveCanvas"></canvas>
+
+  <div class="info-panel" id="infoPanel">
+    <span class="band band-alpha">Alpha (α) 8–13 Hz</span> — 放松、闭眼静息状态<br>
+    当前差频 <strong>10 Hz</strong>：你应该能感受到清晰的搏动节奏
+  </div>
+
+  <div class="presets">
+    <button class="preset-btn" onclick="applyPreset(400, 3)">
+      <div class="freq">3 Hz</div>
+      <div class="desc">Delta · 缓慢起伏</div>
+    </button>
+    <button class="preset-btn" onclick="applyPreset(400, 6)">
+      <div class="freq">6 Hz</div>
+      <div class="desc">Theta · 冥想搏动</div>
+    </button>
+    <button class="preset-btn" onclick="applyPreset(400, 10)">
+      <div class="freq">10 Hz</div>
+      <div class="desc">Alpha · 清晰搏动</div>
+    </button>
+    <button class="preset-btn" onclick="applyPreset(400, 20)">
+      <div class="freq">20 Hz</div>
+      <div class="desc">Beta · 快速颤动</div>
+    </button>
+    <button class="preset-btn" onclick="applyPreset(400, 30)">
+      <div class="freq">30 Hz</div>
+      <div class="desc">极限 · 粗糙感</div>
+    </button>
+    <button class="preset-btn" onclick="applyPreset(400, 40)">
+      <div class="freq">40 Hz</div>
+      <div class="desc">瓦解 · 两个独立音</div>
+    </button>
+    <button class="preset-btn" onclick="applyPreset(200, 10)">
+      <div class="freq">200+10</div>
+      <div class="desc">低载波 · 对比体验</div>
+    </button>
+    <button class="preset-btn" onclick="applyPreset(800, 10)">
+      <div class="freq">800+10</div>
+      <div class="desc">高载波 · 对比体验</div>
+    </button>
+  </div>
+</div>
+
+<script>
+let audioCtx = null;
+let oscLeft = null;
+let oscRight = null;
+let gainNode = null;
+let merger = null;
+let gainLeft = null;
+let gainRight = null;
+let isPlaying = false;
+let animId = null;
+
+function getAudioContext() {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  return audioCtx;
+}
+
+function togglePlay() {
+  if (isPlaying) {
+    stopAudio();
+  } else {
+    startAudio();
+  }
+}
+
+function startAudio() {
+  const ctx = getAudioContext();
+  if (ctx.state === 'suspended') ctx.resume();
+
+  const carrier = parseFloat(document.getElementById('carrier').value);
+  const beat = parseFloat(document.getElementById('beat').value);
+  const vol = parseFloat(document.getElementById('volume').value) / 100;
+
+  const leftFreq = carrier - beat / 2;
+  const rightFreq = carrier + beat / 2;
+
+  // Left oscillator → left channel
+  oscLeft = ctx.createOscillator();
+  oscLeft.type = 'sine';
+  oscLeft.frequency.setValueAtTime(leftFreq, ctx.currentTime);
+
+  // Right oscillator → right channel
+  oscRight = ctx.createOscillator();
+  oscRight.type = 'sine';
+  oscRight.frequency.setValueAtTime(rightFreq, ctx.currentTime);
+
+  // Gain nodes for each channel
+  gainLeft = ctx.createGain();
+  gainRight = ctx.createGain();
+  gainLeft.gain.setValueAtTime(vol, ctx.currentTime);
+  gainRight.gain.setValueAtTime(vol, ctx.currentTime);
+
+  // Merge into stereo
+  merger = ctx.createChannelMerger(2);
+
+  oscLeft.connect(gainLeft);
+  gainLeft.connect(merger, 0, 0);  // left osc → left channel
+
+  oscRight.connect(gainRight);
+  gainRight.connect(merger, 0, 1); // right osc → right channel
+
+  merger.connect(ctx.destination);
+
+  oscLeft.start();
+  oscRight.start();
+
+  isPlaying = true;
+  const btn = document.getElementById('playBtn');
+  btn.textContent = '■ 停止';
+  btn.className = 'play-btn on';
+
+  startVisualization();
+}
+
+function stopAudio() {
+  if (oscLeft) { oscLeft.stop(); oscLeft.disconnect(); oscLeft = null; }
+  if (oscRight) { oscRight.stop(); oscRight.disconnect(); oscRight = null; }
+  if (gainLeft) { gainLeft.disconnect(); gainLeft = null; }
+  if (gainRight) { gainRight.disconnect(); gainRight = null; }
+  if (merger) { merger.disconnect(); merger = null; }
+
+  isPlaying = false;
+  const btn = document.getElementById('playBtn');
+  btn.textContent = '▶ 戴上耳机，点击开始';
+  btn.className = 'play-btn off';
+
+  if (animId) { cancelAnimationFrame(animId); animId = null; }
+  clearCanvas();
+}
+
+function updateParams() {
+  const carrier = parseFloat(document.getElementById('carrier').value);
+  const beat = parseFloat(document.getElementById('beat').value);
+  const vol = parseFloat(document.getElementById('volume').value) / 100;
+
+  const leftFreq = carrier - beat / 2;
+  const rightFreq = carrier + beat / 2;
+
+  document.getElementById('carrierVal').textContent = carrier + ' Hz';
+  document.getElementById('beatVal').textContent = beat + ' Hz';
+  document.getElementById('volVal').textContent = Math.round(vol * 100) + '%';
+  document.getElementById('leftInfo').textContent = '左耳: ' + leftFreq.toFixed(1) + ' Hz';
+  document.getElementById('rightInfo').textContent = '右耳: ' + rightFreq.toFixed(1) + ' Hz';
+
+  if (isPlaying && oscLeft && oscRight) {
+    const ctx = getAudioContext();
+    oscLeft.frequency.setValueAtTime(leftFreq, ctx.currentTime);
+    oscRight.frequency.setValueAtTime(rightFreq, ctx.currentTime);
+    gainLeft.gain.setValueAtTime(vol, ctx.currentTime);
+    gainRight.gain.setValueAtTime(vol, ctx.currentTime);
+  }
+
+  updateInfoPanel(beat);
+}
+
+function updateInfoPanel(beat) {
+  const panel = document.getElementById('infoPanel');
+  let bandHtml = '';
+  let desc = '';
+
+  if (beat <= 4) {
+    bandHtml = '<span class="band band-delta">Delta (δ) 1–4 Hz</span>';
+    desc = '深度睡眠频段。搏动非常缓慢，像一呼一吸的起伏。';
+  } else if (beat <= 8) {
+    bandHtml = '<span class="band band-theta">Theta (θ) 4–8 Hz</span>';
+    desc = '冥想/浅睡频段。能感到明显的节奏搏动，但无法快速数出来。';
+  } else if (beat <= 13) {
+    bandHtml = '<span class="band band-alpha">Alpha (α) 8–13 Hz</span>';
+    desc = '放松频段。搏动清晰而稳定，这是双耳拍体验的"甜区"。';
+  } else if (beat <= 30) {
+    bandHtml = '<span class="band band-beta">Beta (β) 13–30 Hz</span>';
+    desc = '清醒/专注频段。搏动很快，逐渐变为颤动和粗糙感。';
+  } else if (beat <= 40) {
+    bandHtml = '<span class="band band-collapse">接近瓦解区 30–40 Hz</span>';
+    desc = '大脑已经很难融合左右耳信号，你可能开始听到"两个分开的音"。';
+  } else {
+    bandHtml = '<span class="band band-collapse">已超出双耳拍范围 >40 Hz</span>';
+    desc = '大脑无法锁相。你应该能清晰地听到两个独立的纯音，搏动感消失。';
+  }
+
+  panel.innerHTML = bandHtml + ' — ' + desc + '<br>当前差频 <strong>' + beat + ' Hz</strong>';
+}
+
+// Visualization
+function startVisualization() {
+  const canvas = document.getElementById('waveCanvas');
+  const ctx = canvas.getContext('2d');
+  canvas.width = canvas.offsetWidth * 2;
+  canvas.height = canvas.offsetHeight * 2;
+
+  const startTime = performance.now();
+
+  function draw() {
+    const carrier = parseFloat(document.getElementById('carrier').value);
+    const beat = parseFloat(document.getElementById('beat').value);
+    const t = (performance.now() - startTime) / 1000;
+
+    const w = canvas.width;
+    const h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+
+    // Draw beat envelope
+    ctx.beginPath();
+    ctx.strokeStyle = 'rgba(126, 184, 255, 0.6)';
+    ctx.lineWidth = 3;
+    for (let x = 0; x < w; x++) {
+      const tx = t + (x / w) * (4 / Math.max(beat, 1));
+      const env = Math.cos(2 * Math.PI * beat * tx);
+      const y = h / 2 - env * (h * 0.35);
+      if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Draw filled area
+    ctx.beginPath();
+    for (let x = 0; x < w; x++) {
+      const tx = t + (x / w) * (4 / Math.max(beat, 1));
+      const env = Math.cos(2 * Math.PI * beat * tx);
+      const y = h / 2 - env * (h * 0.35);
+      if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.lineTo(w, h / 2);
+    ctx.lineTo(0, h / 2);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(126, 184, 255, 0.08)';
+    ctx.fill();
+
+    // Negative side
+    ctx.beginPath();
+    ctx.strokeStyle = 'rgba(126, 184, 255, 0.3)';
+    ctx.lineWidth = 2;
+    for (let x = 0; x < w; x++) {
+      const tx = t + (x / w) * (4 / Math.max(beat, 1));
+      const env = -Math.cos(2 * Math.PI * beat * tx);
+      const y = h / 2 - env * (h * 0.35);
+      if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Center line
+    ctx.beginPath();
+    ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+    ctx.lineWidth = 1;
+    ctx.moveTo(0, h / 2);
+    ctx.lineTo(w, h / 2);
+    ctx.stroke();
+
+    // Label
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.font = '20px sans-serif';
+    ctx.fillText('差频包络 ' + beat + ' Hz', 12, 28);
+
+    animId = requestAnimationFrame(draw);
+  }
+
+  draw();
+}
+
+function clearCanvas() {
+  const canvas = document.getElementById('waveCanvas');
+  const ctx = canvas.getContext('2d');
+  canvas.width = canvas.offsetWidth * 2;
+  canvas.height = canvas.offsetHeight * 2;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = 'rgba(255,255,255,0.2)';
+  ctx.font = '20px sans-serif';
+  ctx.fillText('点击开始后显示波形', 12, canvas.height / 2 + 6);
+}
+
+function applyPreset(carrier, beat) {
+  document.getElementById('carrier').value = carrier;
+  document.getElementById('beat').value = beat;
+  updateParams();
+  if (!isPlaying) {
+    startAudio();
+  }
+}
+
+// Initialize display
+updateParams();
+clearCanvas();
+</script>
+
+</body>
+</html>

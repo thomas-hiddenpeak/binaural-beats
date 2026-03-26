@@ -183,6 +183,16 @@ canvas {
     </div>
     <div class="control-group">
       <div class="control-label">
+        <span class="name">频率分配</span>
+      </div>
+      <select id="freqDist" onchange="updateParams()">
+        <option value="symmetric">⚖️ 对称分配 — 双耳各移 ±½差频（推荐）</option>
+        <option value="right">➡️ 仅右耳频移 — 左耳原始，右耳 +差频</option>
+        <option value="left">⬅️ 仅左耳频移 — 左耳 -差频，右耳原始</option>
+      </select>
+    </div>
+    <div class="control-group">
+      <div class="control-label">
         <span class="name">音量</span>
         <span class="value" id="volVal">25%</span>
       </div>
@@ -427,10 +437,18 @@ function stopAudio() {
 // ============================================================
 // PURE TONE MODE
 // ============================================================
-function startPureTone(ctx) {
+function getPureFreqs() {
   const carrier = getVal('carrier');
   const beat = getVal('beat');
+  const dist = document.getElementById('freqDist').value;
+  if (dist === 'symmetric') return { left: carrier - beat / 2, right: carrier + beat / 2 };
+  if (dist === 'left') return { left: carrier - beat, right: carrier };
+  return { left: carrier, right: carrier + beat }; // 'right'
+}
+
+function startPureTone(ctx) {
   const vol = getVal('volume') / 100;
+  const freqs = getPureFreqs();
 
   const merger = ctx.createChannelMerger(2);
   const gainL = ctx.createGain();
@@ -442,8 +460,8 @@ function startPureTone(ctx) {
   const oscR = ctx.createOscillator();
   oscL.type = 'sine';
   oscR.type = 'sine';
-  oscL.frequency.setValueAtTime(carrier - beat / 2, ctx.currentTime);
-  oscR.frequency.setValueAtTime(carrier + beat / 2, ctx.currentTime);
+  oscL.frequency.setValueAtTime(freqs.left, ctx.currentTime);
+  oscR.frequency.setValueAtTime(freqs.right, ctx.currentTime);
 
   oscL.connect(gainL); gainL.connect(merger, 0, 0);
   oscR.connect(gainR); gainR.connect(merger, 0, 1);
@@ -452,28 +470,24 @@ function startPureTone(ctx) {
   oscL.start(); oscR.start();
 
   activeNodes.push(oscL, oscR, gainL, gainR, merger);
-  // Store references for live update
   oscL._role = 'pureL'; oscR._role = 'pureR';
   gainL._role = 'pureGainL'; gainR._role = 'pureGainR';
 }
 
 function updatePureTone() {
-  const carrier = getVal('carrier');
-  const beat = getVal('beat');
   const vol = getVal('volume') / 100;
+  const freqs = getPureFreqs();
   const ctx = audioCtx;
   const now = ctx.currentTime;
 
   activeNodes.forEach(n => {
-    if (n._role === 'pureL') n.frequency.setValueAtTime(carrier - beat / 2, now);
-    if (n._role === 'pureR') n.frequency.setValueAtTime(carrier + beat / 2, now);
+    if (n._role === 'pureL') n.frequency.setValueAtTime(freqs.left, now);
+    if (n._role === 'pureR') n.frequency.setValueAtTime(freqs.right, now);
     if (n._role === 'pureGainL' || n._role === 'pureGainR') n.gain.setValueAtTime(vol, now);
   });
 
-  const lf = (carrier - beat / 2).toFixed(1);
-  const rf = (carrier + beat / 2).toFixed(1);
-  document.getElementById('leftInfo').textContent = '左耳: ' + lf + ' Hz';
-  document.getElementById('rightInfo').textContent = '右耳: ' + rf + ' Hz';
+  document.getElementById('leftInfo').textContent = '左耳: ' + freqs.left.toFixed(1) + ' Hz';
+  document.getElementById('rightInfo').textContent = '右耳: ' + freqs.right.toFixed(1) + ' Hz';
 }
 
 // ============================================================
@@ -532,6 +546,14 @@ function handleFileUpload(event) {
   reader.readAsArrayBuffer(file);
 }
 
+function getMusicShifts() {
+  const beat = getVal('beat');
+  const dist = document.getElementById('freqDist').value;
+  if (dist === 'symmetric') return { left: -beat / 2, right: beat / 2 };
+  if (dist === 'left') return { left: -beat, right: 0 };
+  return { left: 0, right: beat }; // 'right'
+}
+
 function startMusic(ctx) {
   if (!analyticReady) {
     alert('请先选择音频文件并等待预处理完成');
@@ -543,26 +565,29 @@ function startMusic(ctx) {
   const sr = ctx.sampleRate;
   const dataLen = analyticReal.length;
   const loop = document.getElementById('loopToggle').checked;
+  const shifts = getMusicShifts();
 
   // ScriptProcessorNode for real-time SSB modulation
   const bufSize = 4096;
   ssbProcessor = ctx.createScriptProcessor(bufSize, 0, 2);
 
   let pos = 0;
-  let phase = 0;
-  let currentBeat = beat;
+  let phaseL = 0, phaseR = 0;
+  let currentShiftL = shifts.left, currentShiftR = shifts.right;
 
-  ssbProcessor._setBeat = (v) => { currentBeat = v; };
+  ssbProcessor._setShifts = (sL, sR) => { currentShiftL = sL; currentShiftR = sR; };
 
   const aReal = analyticReal;
   const aImag = analyticImag;
+  const TWO_PI = 2 * Math.PI;
 
   ssbProcessor.onaudioprocess = function(e) {
     const outL = e.outputBuffer.getChannelData(0);
     const outR = e.outputBuffer.getChannelData(1);
     const len = outL.length;
-    const bf = currentBeat;
-    const phaseInc = 2 * Math.PI * bf / sr;
+    const sL = currentShiftL, sR = currentShiftR;
+    const phaseIncL = TWO_PI * sL / sr;
+    const phaseIncR = TWO_PI * sR / sr;
 
     for (let i = 0; i < len; i++) {
       if (pos >= dataLen) {
@@ -572,15 +597,20 @@ function startMusic(ctx) {
       const r = aReal[pos];
       const h = aImag[pos];
 
-      // Left: original signal
-      outL[i] = r;
+      // SSB: Re((r + jh) * e^(j*phase)) = r*cos(phase) - h*sin(phase)
+      // When shift=0, cos=1 sin=0, output = r (original)
+      if (sL === 0) { outL[i] = r; }
+      else { outL[i] = r * Math.cos(phaseL) - h * Math.sin(phaseL); }
 
-      // Right: SSB frequency-shifted signal
-      // Re( (r + j*h) * e^(j*phase) ) = r*cos(phase) - h*sin(phase)
-      outR[i] = r * Math.cos(phase) - h * Math.sin(phase);
+      if (sR === 0) { outR[i] = r; }
+      else { outR[i] = r * Math.cos(phaseR) - h * Math.sin(phaseR); }
 
-      phase += phaseInc;
-      if (phase > 6.283185307) phase -= 6.283185307;
+      phaseL += phaseIncL;
+      phaseR += phaseIncR;
+      if (phaseL > TWO_PI) phaseL -= TWO_PI;
+      else if (phaseL < -TWO_PI) phaseL += TWO_PI;
+      if (phaseR > TWO_PI) phaseR -= TWO_PI;
+      else if (phaseR < -TWO_PI) phaseR += TWO_PI;
       pos++;
     }
   };
@@ -596,29 +626,50 @@ function startMusic(ctx) {
 
   activeNodes.push(ssbProcessor, volNode);
 
-  document.getElementById('leftInfo').textContent = '左耳: 原始音频';
-  document.getElementById('rightInfo').textContent = '右耳: 精确频移 +' + beat + ' Hz (FFT-SSB)';
+  updateMusicInfo();
+}
+
+function updateMusicInfo() {
+  const shifts = getMusicShifts();
+  const dist = document.getElementById('freqDist').value;
+  if (dist === 'symmetric') {
+    document.getElementById('leftInfo').textContent = '左耳: 频移 ' + shifts.left.toFixed(1) + ' Hz';
+    document.getElementById('rightInfo').textContent = '右耳: 频移 +' + shifts.right.toFixed(1) + ' Hz';
+  } else if (dist === 'left') {
+    document.getElementById('leftInfo').textContent = '左耳: 频移 ' + shifts.left.toFixed(1) + ' Hz';
+    document.getElementById('rightInfo').textContent = '右耳: 原始音频';
+  } else {
+    document.getElementById('leftInfo').textContent = '左耳: 原始音频';
+    document.getElementById('rightInfo').textContent = '右耳: 频移 +' + shifts.right.toFixed(1) + ' Hz';
+  }
 }
 
 function updateMusic() {
-  const beat = getVal('beat');
   const vol = getVal('volume') / 100;
-  if (ssbProcessor && ssbProcessor._setBeat) ssbProcessor._setBeat(beat);
+  const shifts = getMusicShifts();
+  if (ssbProcessor && ssbProcessor._setShifts) ssbProcessor._setShifts(shifts.left, shifts.right);
   activeNodes.forEach(n => {
     if (n._role === 'musicVol') n.gain.setValueAtTime(vol, audioCtx.currentTime);
   });
-  document.getElementById('leftInfo').textContent = '左耳: 原始音频';
-  document.getElementById('rightInfo').textContent = '右耳: 精确频移 +' + beat + ' Hz (FFT-SSB)';
+  updateMusicInfo();
 }
 
 // ============================================================
 // DRONE MODE
 // ============================================================
+function getDroneFreqs(baseFreq, ratio) {
+  const beat = getVal('beat');
+  const dist = document.getElementById('freqDist').value;
+  const center = baseFreq * ratio;
+  if (dist === 'symmetric') return { left: center - beat / 2, right: center + beat / 2 };
+  if (dist === 'left') return { left: center - beat, right: center };
+  return { left: center, right: center + beat }; // 'right'
+}
+
 function startDrone(ctx) {
   const type = document.getElementById('droneType').value;
   const def = DRONE_TYPES[type];
   const baseFreq = getVal('droneFreq');
-  const beat = getVal('beat');
   const vol = getVal('volume') / 100;
 
   const merger = ctx.createChannelMerger(2);
@@ -639,15 +690,14 @@ function startDrone(ctx) {
   droneOscillators = [];
 
   def.partials.forEach(p => {
-    const freqL = baseFreq * p.ratio;
-    const freqR = baseFreq * p.ratio + beat;
+    const freqs = getDroneFreqs(baseFreq, p.ratio);
 
     const oscL = ctx.createOscillator();
     const oscR = ctx.createOscillator();
     oscL.type = 'sine';
     oscR.type = 'sine';
-    oscL.frequency.setValueAtTime(freqL, ctx.currentTime);
-    oscR.frequency.setValueAtTime(freqR, ctx.currentTime);
+    oscL.frequency.setValueAtTime(freqs.left, ctx.currentTime);
+    oscR.frequency.setValueAtTime(freqs.right, ctx.currentTime);
 
     const gL = ctx.createGain();
     const gR = ctx.createGain();
@@ -674,10 +724,12 @@ function updateDrone() {
   const beat = getVal('beat');
   const vol = getVal('volume') / 100;
   const now = audioCtx.currentTime;
+  const dist = document.getElementById('freqDist').value;
 
   droneOscillators.forEach(d => {
-    d.oscL.frequency.setValueAtTime(baseFreq * d.ratio, now);
-    d.oscR.frequency.setValueAtTime(baseFreq * d.ratio + beat, now);
+    const freqs = getDroneFreqs(baseFreq, d.ratio);
+    d.oscL.frequency.setValueAtTime(freqs.left, now);
+    d.oscR.frequency.setValueAtTime(freqs.right, now);
   });
   activeNodes.forEach(n => {
     if (n._role === 'droneVol') n.gain.setValueAtTime(vol, now);
@@ -686,8 +738,16 @@ function updateDrone() {
   const type = document.getElementById('droneType').value;
   const partials = DRONE_TYPES[type].partials;
   const lowest = baseFreq * Math.min(...partials.map(p => p.ratio));
-  document.getElementById('leftInfo').textContent = '左耳: 基频 ' + lowest.toFixed(0) + ' Hz + 泛音';
-  document.getElementById('rightInfo').textContent = '右耳: 全部 +' + beat + ' Hz 线性频移';
+  if (dist === 'symmetric') {
+    document.getElementById('leftInfo').textContent = '左耳: 基频 ' + lowest.toFixed(0) + ' Hz -' + (beat/2) + ' Hz';
+    document.getElementById('rightInfo').textContent = '右耳: 基频 ' + lowest.toFixed(0) + ' Hz +' + (beat/2) + ' Hz';
+  } else if (dist === 'left') {
+    document.getElementById('leftInfo').textContent = '左耳: 全部 -' + beat + ' Hz 线性频移';
+    document.getElementById('rightInfo').textContent = '右耳: 基频 ' + lowest.toFixed(0) + ' Hz + 泛音';
+  } else {
+    document.getElementById('leftInfo').textContent = '左耳: 基频 ' + lowest.toFixed(0) + ' Hz + 泛音';
+    document.getElementById('rightInfo').textContent = '右耳: 全部 +' + beat + ' Hz 线性频移';
+  }
   document.getElementById('droneFreqVal').textContent = baseFreq + ' Hz';
 }
 
@@ -729,22 +789,30 @@ function updateParams() {
     document.getElementById('carrierVal').textContent = getVal('carrier') + ' Hz';
     if (isPlaying) updatePureTone();
     else {
-      const c = getVal('carrier');
-      document.getElementById('leftInfo').textContent = '左耳: ' + (c - beat/2).toFixed(1) + ' Hz';
-      document.getElementById('rightInfo').textContent = '右耳: ' + (c + beat/2).toFixed(1) + ' Hz';
+      const freqs = getPureFreqs();
+      document.getElementById('leftInfo').textContent = '左耳: ' + freqs.left.toFixed(1) + ' Hz';
+      document.getElementById('rightInfo').textContent = '右耳: ' + freqs.right.toFixed(1) + ' Hz';
     }
   } else if (currentMode === 'music') {
     if (isPlaying) updateMusic();
     else {
-      document.getElementById('leftInfo').textContent = '左耳: 原始音频';
-      document.getElementById('rightInfo').textContent = '右耳: 频移 +' + beat + ' Hz';
+      updateMusicInfo();
     }
   } else if (currentMode === 'drone') {
     if (isPlaying) updateDrone();
     else {
       const bf = getVal('droneFreq');
-      document.getElementById('leftInfo').textContent = '左耳: 基频 ' + bf + ' Hz + 泛音';
-      document.getElementById('rightInfo').textContent = '右耳: 全部 +' + beat + ' Hz 线性频移';
+      const dist = document.getElementById('freqDist').value;
+      if (dist === 'symmetric') {
+        document.getElementById('leftInfo').textContent = '左耳: 基频 ' + bf + ' Hz -' + (beat/2) + ' Hz';
+        document.getElementById('rightInfo').textContent = '右耳: 基频 ' + bf + ' Hz +' + (beat/2) + ' Hz';
+      } else if (dist === 'left') {
+        document.getElementById('leftInfo').textContent = '左耳: 全部 -' + beat + ' Hz 线性频移';
+        document.getElementById('rightInfo').textContent = '右耳: 基频 ' + bf + ' Hz + 泛音';
+      } else {
+        document.getElementById('leftInfo').textContent = '左耳: 基频 ' + bf + ' Hz + 泛音';
+        document.getElementById('rightInfo').textContent = '右耳: 全部 +' + beat + ' Hz 线性频移';
+      }
       document.getElementById('droneFreqVal').textContent = bf + ' Hz';
     }
   }
@@ -782,9 +850,10 @@ function updateInfoPanel(beat) {
     bandHtml = '<span class="band-collapse">超出范围 >40 Hz</span>';
     desc = '双耳拍消失，听到两个独立的音。';
   }
-  const modeNote = currentMode === 'music' ? '<br>📌 音乐模式: SSB线性频移，所有频率分量共享同一差频'
-    : currentMode === 'drone' ? '<br>📌 持续音模式: 全部泛音线性频移，搏动感丰满厚实'
-    : '<br>📌 纯音模式: 最经典的双耳拍体验';
+  const distLabel = { symmetric: '对称分配', left: '仅左耳频移', right: '仅右耳频移' }[document.getElementById('freqDist').value];
+  const modeNote = currentMode === 'music' ? '<br>📌 音乐模式: SSB线性频移 · ' + distLabel
+    : currentMode === 'drone' ? '<br>📌 持续音模式: 全部泛音线性频移 · ' + distLabel
+    : '<br>📌 纯音模式: 最经典的双耳拍体验 · ' + distLabel;
   panel.innerHTML = bandHtml + ' — ' + desc + '<br>当前差频 <strong>' + beat + ' Hz</strong>' + modeNote;
 }
 
